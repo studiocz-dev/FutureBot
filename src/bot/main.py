@@ -128,6 +128,17 @@ class TradingBot:
         async def on_ready():
             logger.info(f"Discord bot logged in as {self.discord_bot.user}")
             logger.info(f"Bot is ready! Use commands like: >signal BTC")
+            logger.info(f"Registered {len(self.discord_bot.commands)} commands")
+        
+        @self.discord_bot.event
+        async def on_command(ctx):
+            """Log when a command is invoked."""
+            logger.info(f"Command '{ctx.command}' invoked by {ctx.author} in {ctx.guild or 'DM'}")
+        
+        @self.discord_bot.event
+        async def on_command_completion(ctx):
+            """Log when a command completes successfully."""
+            logger.info(f"Command '{ctx.command}' completed successfully for {ctx.author}")
         
         # Initialize Binance WebSocket manager
         logger.info("Initializing Binance WebSocket manager...")

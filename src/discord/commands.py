@@ -30,6 +30,26 @@ def setup_commands(
         metrics: Metrics tracker
     """
     
+    @bot.event
+    async def on_command_error(ctx: commands.Context, error: commands.CommandError):
+        """
+        Global error handler for commands.
+        Prevents commands from crashing the bot.
+        """
+        if isinstance(error, commands.CommandNotFound):
+            await ctx.send(f"❌ Unknown command. Use `>help` to see available commands.")
+        elif isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send(f"❌ Missing required argument: `{error.param.name}`. Use `>help` for usage.")
+        elif isinstance(error, commands.BadArgument):
+            await ctx.send(f"❌ Invalid argument. Use `>help` for usage.")
+        elif isinstance(error, commands.CommandInvokeError):
+            logger.error(f"Error executing command: {error.original}", exc_info=error.original)
+            await ctx.send("❌ An error occurred while executing the command. Please try again later.")
+        else:
+            logger.error(f"Unhandled command error: {error}", exc_info=error)
+            await ctx.send("❌ An unexpected error occurred.")
+    
+    
     @bot.command(name="signal", aliases=["s"])
     async def signal_command(ctx: commands.Context, symbol: Optional[str] = None, timeframe: Optional[str] = "1h"):
         """
@@ -175,10 +195,16 @@ def setup_commands(
         Usage: >status
         """
         try:
+            logger.info(f"Status command called by {ctx.author}")
+            
             # Gather status information
+            logger.debug("Fetching fuser stats...")
             fuser_stats = signal_fuser.get_stats()
+            
+            logger.debug("Fetching metrics data...")
             metrics_data = metrics.get_summary()
             
+            logger.debug("Creating embed...")
             embed = discord.Embed(
                 title="🤖 Bot Status",
                 description="Current bot statistics and configuration",
@@ -210,8 +236,9 @@ def setup_commands(
             
             embed.set_footer(text=f"Bot: {bot.user.name}")
             
+            logger.debug("Sending status embed...")
             await ctx.send(embed=embed)
-            logger.info(f"Status command executed by {ctx.author}")
+            logger.info(f"Status command executed successfully by {ctx.author}")
         
         except Exception as e:
             logger.error(f"Error in status command: {e}", exc_info=True)
