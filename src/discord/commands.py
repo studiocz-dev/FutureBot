@@ -353,5 +353,9 @@ def setup_commands(
             logger.error(f"Error in signals list command: {e}", exc_info=True)
             await ctx.send("❌ An error occurred while fetching signals.")
     
-    logger.info("Registered Discord prefix commands (>signal, >status, >help, >signals)")
+    # Log all registered commands
+    registered_commands = [cmd.name for cmd in bot.commands]
+    logger.info(f"Registered Discord prefix commands: {', '.join(registered_commands)}")
+    logger.info(f"Total commands registered: {len(registered_commands)}")
+
 

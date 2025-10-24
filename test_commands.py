@@ -1,90 +1,107 @@
 """
-Test script to verify Discord bot commands work correctly.
+Interactive test script to verify Discord bot commands.
 
-Run this after starting the bot to test command responsiveness.
+This script helps you test if commands are working properly.
+It does NOT start the bot - your bot must be running separately.
 """
 
-import asyncio
-import os
-from dotenv import load_dotenv
-import discord
-from discord.ext import commands
+import sys
 
-load_dotenv()
-
-async def test_bot_commands():
-    """Test bot commands via API (not user interaction)."""
-    
-    print("=" * 60)
-    print("Discord Bot Command Test")
-    print("=" * 60)
-    
-    # Create a test bot client
-    intents = discord.Intents.default()
-    intents.message_content = True
-    
-    bot = commands.Bot(command_prefix=">", intents=intents)
-    
-    @bot.event
-    async def on_ready():
-        print(f"✅ Connected as {bot.user}")
-        print(f"📋 Registered commands: {', '.join([cmd.name for cmd in bot.commands])}")
-        print()
-        print("=" * 60)
-        print("MANUAL TEST INSTRUCTIONS:")
-        print("=" * 60)
-        print("1. Go to your Discord server")
-        print("2. In the channel where the bot is active, type:")
-        print()
-        print("   >help")
-        print("   >status")
-        print("   >signal BTC")
-        print("   >signals 5")
-        print()
-        print("3. Verify that:")
-        print("   ✅ The bot responds to each command")
-        print("   ✅ The bot continues running after each command")
-        print("   ✅ Signal generation continues in the background")
-        print()
-        print("4. Check the logs for:")
-        print("   - 'Command invoked by...'")
-        print("   - 'Command completed successfully...'")
-        print("   - Any error messages")
-        print()
-        print("=" * 60)
-        print("Press Ctrl+C to exit this test")
-        print("=" * 60)
-        
-        # Keep running to monitor
-        try:
-            await asyncio.Event().wait()
-        except KeyboardInterrupt:
-            print("\n✅ Test complete. Shutting down...")
-    
-    @bot.event
-    async def on_command(ctx):
-        print(f"📨 Command received: >{ctx.command} from {ctx.author}")
-    
-    @bot.event
-    async def on_command_completion(ctx):
-        print(f"✅ Command completed: >{ctx.command}")
-    
-    @bot.event
-    async def on_command_error(ctx, error):
-        print(f"❌ Command error: {error}")
-    
-    token = os.getenv("DISCORD_TOKEN")
-    if not token:
-        print("❌ DISCORD_TOKEN not found in .env file")
-        return
-    
-    try:
-        await bot.start(token)
-    except KeyboardInterrupt:
-        await bot.close()
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(test_bot_commands())
-    except KeyboardInterrupt:
-        print("\n👋 Goodbye!")
+print("=" * 80)
+print("Discord Bot Command Testing Guide")
+print("=" * 80)
+print()
+print("⚠️  IMPORTANT: Make sure your bot is running first!")
+print("   Start it with: python start.py")
+print()
+print("=" * 80)
+print("COMMANDS TO TEST:")
+print("=" * 80)
+print()
+print("1. >help")
+print("   Expected: Bot shows help embed with all available commands")
+print()
+print("2. >status")
+print("   Expected: Bot shows:")
+print("   - Configuration (min confidence, analyzers, cooldown)")
+print("   - Signals today (total, long, short)")
+print("   - Active cooldowns")
+print()
+print("3. >signal BTC")
+print("   Expected: Bot shows latest BTCUSDT signal")
+print()
+print("4. >signal ETH 4h")
+print("   Expected: Bot shows latest ETHUSDT 4h signal")
+print()
+print("5. >signals 5")
+print("   Expected: Bot shows last 5 signals across all symbols")
+print()
+print("=" * 80)
+print("WHAT TO CHECK:")
+print("=" * 80)
+print()
+print("✅ Bot responds to each command")
+print("✅ Bot continues running after command (doesn't stop)")
+print("✅ Signal generation continues in background")
+print("✅ New signals are still sent to Discord")
+print()
+print("=" * 80)
+print("CHECK BOT LOGS FOR:")
+print("=" * 80)
+print()
+print("✅ 'Command \"X\" invoked by...'")
+print("✅ 'Command \"X\" completed successfully...'")
+print("❌ Any error messages")
+print()
+print("=" * 80)
+print("TESTING PROCEDURE:")
+print("=" * 80)
+print()
+print("1. Make sure bot is running (python start.py)")
+print("2. Go to your Discord server")
+print("3. Type each command listed above")
+print("4. Verify bot responds correctly")
+print("5. Watch bot logs for command execution messages")
+print("6. Wait a few minutes to see if signals continue")
+print()
+print("=" * 80)
+print("IF COMMANDS DON'T WORK:")
+print("=" * 80)
+print()
+print("1. Check bot logs for errors:")
+print("   - 'Error in X command...'")
+print("   - 'Command error...'")
+print()
+print("2. Verify bot has Message Content Intent enabled:")
+print("   - Go to Discord Developer Portal")
+print("   - Your App → Bot")
+print("   - Enable 'Message Content Intent'")
+print("   - Restart bot")
+print()
+print("3. Check bot logs show:")
+print("   - 'Registered Discord prefix commands: signal, status, help, signals'")
+print("   - 'Total commands registered: 4'")
+print()
+print("4. Try pinging the bot:")
+print("   - Type: @FutureBot")
+print("   - If bot doesn't respond, it might not be online")
+print()
+print("=" * 80)
+print("COMMON ISSUES:")
+print("=" * 80)
+print()
+print("❌ Bot shows online but doesn't respond:")
+print("   → Message Content Intent not enabled")
+print()
+print("❌ 'Command not found' error:")
+print("   → Commands not registered, check bot logs")
+print()
+print("❌ Bot responds but then stops:")
+print("   → Check for errors in bot logs")
+print()
+print("❌ Status command fails:")
+print("   → Check metrics.get_summary() in logs")
+print()
+print("=" * 80)
+print()
+input("Press ENTER when you're ready to test commands in Discord...")
