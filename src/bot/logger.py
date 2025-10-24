@@ -112,17 +112,36 @@ def setup_logger(name: str, level: Optional[str] = None) -> logging.Logger:
     logger.handlers.clear()
     
     # Create console handler
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(getattr(logging, log_level))
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(getattr(logging, log_level))
     
     # Set formatter based on config
     if config.log.format == "json":
-        formatter = JSONFormatter()
+        console_formatter = JSONFormatter()
     else:
-        formatter = TextFormatter()
+        console_formatter = TextFormatter()
     
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+    
+    # Create file handler for persistent logs
+    try:
+        from pathlib import Path
+        log_dir = Path("logs")
+        log_dir.mkdir(exist_ok=True)
+        
+        # Daily rotating log file
+        log_file = log_dir / f"bot_{datetime.now().strftime('%Y%m%d')}.log"
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setLevel(getattr(logging, log_level))
+        
+        # Always use JSON format for file logs (easier to parse)
+        file_formatter = JSONFormatter()
+        file_handler.setFormatter(file_formatter)
+        logger.addHandler(file_handler)
+    except Exception as e:
+        # Don't fail if file logging setup fails
+        print(f"Warning: Could not setup file logging: {e}", file=sys.stderr)
     
     # Prevent propagation to root logger
     logger.propagate = False
