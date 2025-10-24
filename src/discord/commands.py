@@ -36,18 +36,22 @@ def setup_commands(
         Global error handler for commands.
         Prevents commands from crashing the bot.
         """
-        if isinstance(error, commands.CommandNotFound):
-            await ctx.send(f"❌ Unknown command. Use `>help` to see available commands.")
-        elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send(f"❌ Missing required argument: `{error.param.name}`. Use `>help` for usage.")
-        elif isinstance(error, commands.BadArgument):
-            await ctx.send(f"❌ Invalid argument. Use `>help` for usage.")
-        elif isinstance(error, commands.CommandInvokeError):
-            logger.error(f"Error executing command: {error.original}", exc_info=error.original)
-            await ctx.send("❌ An error occurred while executing the command. Please try again later.")
-        else:
-            logger.error(f"Unhandled command error: {error}", exc_info=error)
-            await ctx.send("❌ An unexpected error occurred.")
+        try:
+            if isinstance(error, commands.CommandNotFound):
+                await ctx.send(f"❌ Unknown command. Use `>help` to see available commands.")
+            elif isinstance(error, commands.MissingRequiredArgument):
+                await ctx.send(f"❌ Missing required argument: `{error.param.name}`. Use `>help` for usage.")
+            elif isinstance(error, commands.BadArgument):
+                await ctx.send(f"❌ Invalid argument. Use `>help` for usage.")
+            elif isinstance(error, commands.CommandInvokeError):
+                logger.error(f"Error executing command: {error.original}", exc_info=error.original)
+                await ctx.send("❌ An error occurred while executing the command. Please try again later.")
+            else:
+                logger.error(f"Unhandled command error: {error}", exc_info=error)
+                await ctx.send("❌ An unexpected error occurred.")
+        except Exception as e:
+            # Even the error handler can fail - log but don't crash
+            logger.error(f"Error in error handler: {e}", exc_info=True)
     
     
     @bot.command(name="signal", aliases=["s"])
@@ -197,12 +201,35 @@ def setup_commands(
         try:
             logger.info(f"Status command called by {ctx.author}")
             
-            # Gather status information
-            logger.debug("Fetching fuser stats...")
-            fuser_stats = signal_fuser.get_stats()
+            # Gather status information with error handling
+            fuser_stats = {}
+            metrics_data = {}
             
-            logger.debug("Fetching metrics data...")
-            metrics_data = metrics.get_summary()
+            try:
+                logger.debug("Fetching fuser stats...")
+                fuser_stats = signal_fuser.get_stats()
+                logger.debug(f"Fuser stats: {fuser_stats}")
+            except Exception as e:
+                logger.error(f"Error fetching fuser stats: {e}", exc_info=True)
+                fuser_stats = {
+                    'min_confidence': 0.65,
+                    'wyckoff_enabled': True,
+                    'elliott_enabled': True,
+                    'cooldown_seconds': 300,
+                    'active_cooldowns': 0
+                }
+            
+            try:
+                logger.debug("Fetching metrics data...")
+                metrics_data = metrics.get_summary()
+                logger.debug(f"Metrics data keys: {metrics_data.keys()}")
+            except Exception as e:
+                logger.error(f"Error fetching metrics: {e}", exc_info=True)
+                metrics_data = {
+                    'total_signals': 0,
+                    'long_signals': 0,
+                    'short_signals': 0
+                }
             
             logger.debug("Creating embed...")
             embed = discord.Embed(
@@ -213,10 +240,10 @@ def setup_commands(
             
             embed.add_field(
                 name="⚙️ Configuration",
-                value=f"Min Confidence: {fuser_stats['min_confidence']:.0%}\n"
-                      f"Wyckoff: {'✅' if fuser_stats['wyckoff_enabled'] else '❌'}\n"
-                      f"Elliott Wave: {'✅' if fuser_stats['elliott_enabled'] else '❌'}\n"
-                      f"Cooldown: {fuser_stats['cooldown_seconds']}s",
+                value=f"Min Confidence: {fuser_stats.get('min_confidence', 0.65):.0%}\n"
+                      f"Wyckoff: {'✅' if fuser_stats.get('wyckoff_enabled', True) else '❌'}\n"
+                      f"Elliott Wave: {'✅' if fuser_stats.get('elliott_enabled', True) else '❌'}\n"
+                      f"Cooldown: {fuser_stats.get('cooldown_seconds', 300)}s",
                 inline=True
             )
             
@@ -230,19 +257,25 @@ def setup_commands(
             
             embed.add_field(
                 name="🔥 Active Cooldowns",
-                value=str(fuser_stats['active_cooldowns']),
+                value=str(fuser_stats.get('active_cooldowns', 0)),
                 inline=True
             )
             
-            embed.set_footer(text=f"Bot: {bot.user.name}")
+            try:
+                embed.set_footer(text=f"Bot: {bot.user.name}")
+            except:
+                embed.set_footer(text="Bot Status")
             
             logger.debug("Sending status embed...")
             await ctx.send(embed=embed)
-            logger.info(f"Status command executed successfully by {ctx.author}")
+            logger.info(f"✅ Status command executed successfully by {ctx.author}")
         
         except Exception as e:
-            logger.error(f"Error in status command: {e}", exc_info=True)
-            await ctx.send("❌ An error occurred while fetching status.")
+            logger.error(f"❌ Error in status command: {e}", exc_info=True)
+            try:
+                await ctx.send("❌ An error occurred while fetching status. Check bot logs for details.")
+            except:
+                logger.error("Failed to send error message to Discord")
     
     @bot.command(name="help", aliases=["h", "commands"])
     async def help_command(ctx: commands.Context):
