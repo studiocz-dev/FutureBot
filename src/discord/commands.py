@@ -5,6 +5,7 @@ Provides interactive text commands with > prefix for bot control.
 Commands: >signal BTC, >status, >help
 """
 
+import os
 from typing import Optional, Any
 import discord
 from discord.ext import commands
@@ -472,6 +473,111 @@ def setup_commands(
         except Exception as e:
             logger.error(f"Error in cleanup command: {e}", exc_info=True)
             await ctx.send("❌ An error occurred during cleanup.")
+    
+    @bot.command(name="cleantf", aliases=["clean_timeframes", "cleanup_tf"])
+    async def cleanup_timeframes_cmd(ctx: commands.Context, confirm: Optional[str] = None):
+        """
+        Remove candles from old/unwanted timeframes.
+        Keeps only the currently configured timeframes in .env
+        
+        Usage:
+            >cleantf          - Show what will be deleted
+            >cleantf confirm  - Actually delete old timeframe data
+        """
+        try:
+            # Get current configured timeframes from environment
+            timeframes_str = os.getenv("TIMEFRAMES", "15m")
+            configured_timeframes = [tf.strip() for tf in timeframes_str.split(",")]
+            
+            # All possible timeframes Binance supports
+            all_timeframes = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
+            
+            # Find timeframes to delete (not in current config)
+            timeframes_to_delete = [tf for tf in all_timeframes if tf not in configured_timeframes]
+            
+            if not timeframes_to_delete:
+                embed = discord.Embed(
+                    title="✅ No Cleanup Needed",
+                    description="All candles match your current timeframe configuration.",
+                    color=discord.Color.green()
+                )
+                embed.add_field(
+                    name="Configured Timeframes",
+                    value=", ".join(configured_timeframes),
+                    inline=False
+                )
+                await ctx.send(embed=embed)
+                return
+            
+            # If no confirmation, show warning
+            if not confirm or confirm.lower() != "confirm":
+                embed = discord.Embed(
+                    title="⚠️ Timeframe Cleanup Warning",
+                    description=f"This will **permanently delete** candles from unused timeframes.\n\n"
+                               f"**Your current configuration uses:** `{', '.join(configured_timeframes)}`",
+                    color=discord.Color.orange()
+                )
+                
+                embed.add_field(
+                    name="🗑️ Timeframes to Delete",
+                    value=", ".join(timeframes_to_delete) if timeframes_to_delete else "None",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="✅ What Will Be Kept",
+                    value=f"• Candles for: {', '.join(configured_timeframes)}\n"
+                          f"• All signals\n"
+                          f"• All other database tables",
+                    inline=False
+                )
+                
+                embed.add_field(
+                    name="📝 To Proceed",
+                    value="Run: `>cleantf confirm`",
+                    inline=False
+                )
+                
+                embed.set_footer(text="This action cannot be undone!")
+                await ctx.send(embed=embed)
+                return
+            
+            # Execute cleanup
+            deleted_count = await supabase.cleanup_timeframes(timeframes_to_delete)
+            
+            # Show results
+            embed = discord.Embed(
+                title="✅ Timeframe Cleanup Complete",
+                description=f"Successfully cleaned up old timeframe data!",
+                color=discord.Color.green()
+            )
+            
+            embed.add_field(
+                name="📊 Deleted",
+                value=f"**{deleted_count:,}** candles from {len(timeframes_to_delete)} timeframes",
+                inline=False
+            )
+            
+            embed.add_field(
+                name="🗑️ Removed Timeframes",
+                value=", ".join(timeframes_to_delete),
+                inline=False
+            )
+            
+            embed.add_field(
+                name="✅ Keeping Timeframes",
+                value=", ".join(configured_timeframes),
+                inline=False
+            )
+            
+            embed.set_footer(text=f"Executed by {ctx.author.name}")
+            await ctx.send(embed=embed)
+            
+            logger.info(f"Timeframe cleanup executed by {ctx.author.name}: {deleted_count} candles from {timeframes_to_delete}")
+        
+        except Exception as e:
+            logger.error(f"Error in cleanup_timeframes command: {e}", exc_info=True)
+            await ctx.send(f"❌ Timeframe cleanup failed: {str(e)}")
     
     # Log all registered commands
     registered_commands = [cmd.name for cmd in bot.commands]

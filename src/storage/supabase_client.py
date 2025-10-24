@@ -462,6 +462,48 @@ class SupabaseClient:
             logger.error(f"Error deleting old signals: {e}")
             return 0
     
+    async def cleanup_timeframes(self, exclude_timeframes: List[str]) -> int:
+        """
+        Delete candles from specific timeframes (keep only specified timeframes).
+        
+        Args:
+            exclude_timeframes: List of timeframes to DELETE (e.g., ['5m', '1h', '4h', '1d'])
+        
+        Returns:
+            Number of deleted records
+        """
+        try:
+            if not exclude_timeframes:
+                logger.warning("No timeframes specified for cleanup")
+                return 0
+            
+            total_deleted = 0
+            
+            # Delete each timeframe separately
+            for timeframe in exclude_timeframes:
+                count_response = self.client.table("candles") \
+                    .select("id", count="exact") \
+                    .eq("timeframe", timeframe) \
+                    .execute()
+                
+                count = count_response.count if hasattr(count_response, 'count') else 0
+                
+                if count > 0:
+                    self.client.table("candles") \
+                        .delete() \
+                        .eq("timeframe", timeframe) \
+                        .execute()
+                    
+                    logger.info(f"Deleted {count} candles for timeframe {timeframe}")
+                    total_deleted += count
+            
+            logger.info(f"Total deleted {total_deleted} candles from {len(exclude_timeframes)} timeframes")
+            return total_deleted
+        
+        except Exception as e:
+            logger.error(f"Error deleting candles by timeframe: {e}")
+            return 0
+    
     async def close(self) -> None:
         """Close the Supabase client."""
         # Supabase Python client doesn't require explicit closing
