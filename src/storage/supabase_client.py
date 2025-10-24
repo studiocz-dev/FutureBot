@@ -215,7 +215,11 @@ class SupabaseClient:
             logger.info(f"Bulk inserted {len(rows)} candles for {symbol} {timeframe}")
         
         except Exception as e:
-            logger.error(f"Error bulk inserting candles: {e}")
+            # Ignore duplicate key errors (candles already exist in database)
+            if "duplicate key" in str(e).lower():
+                logger.debug(f"Candles already exist for {symbol} {timeframe} (skipping duplicates)")
+            else:
+                logger.error(f"Error bulk inserting candles: {e}")
     
     async def get_candles(
         self,
