@@ -1,6 +1,6 @@
 # Server Deployment Guide
 
-## Issues Found in Log: futurebot-console-2025-10-24T01-35-57-865Z.log
+## Issues Found in Logs
 
 ### ❌ Issue 1: Disk Space
 ```
@@ -13,6 +13,13 @@ ERROR: Could not install packages due to an OSError: [Errno 28] No space left on
 ImportError: attempted relative import with no known parent package
 ```
 **Problem:** Server is running `python /home/container/src/bot/main.py` directly, but the code uses relative imports.
+
+### ❌ Issue 3: Async Function Not Awaited
+```
+RuntimeWarning: coroutine 'main' was never awaited
+```
+**Problem:** The `main()` function is async but was being called as a regular function.
+**Solution:** Use `asyncio.run(main())` - this is now fixed in `start.py`.
 
 ---
 

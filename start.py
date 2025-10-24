@@ -3,6 +3,7 @@
 Launcher script for FutureBot.
 This allows the bot to be started as a script while maintaining proper package imports.
 """
+import asyncio
 import sys
 from pathlib import Path
 
@@ -14,4 +15,4 @@ sys.path.insert(0, str(project_root))
 from src.bot.main import main
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
