@@ -95,6 +95,7 @@ class TradingBot:
             enable_wyckoff=self.config.signals.enable_wyckoff,
             enable_elliott=self.config.signals.enable_elliott,
             cooldown=self.config.signals.signal_cooldown,
+            prevent_conflicts=self.config.signals.prevent_conflicts,
         )
         
         # Initialize Discord bot

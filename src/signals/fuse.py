@@ -35,6 +35,7 @@ class SignalFuser:
         enable_wyckoff: bool = True,
         enable_elliott: bool = True,
         cooldown: int = 300,
+        prevent_conflicts: bool = True,
     ):
         """
         Initialize signal fuser.
@@ -45,12 +46,14 @@ class SignalFuser:
             enable_wyckoff: Enable Wyckoff analysis
             enable_elliott: Enable Elliott Wave analysis
             cooldown: Cooldown period in seconds between signals for same symbol/timeframe
+            prevent_conflicts: Prevent conflicting signals (SHORT/LONG) for same symbol within 1 hour
         """
         self.supabase = supabase
         self.min_confidence = min_confidence
         self.enable_wyckoff = enable_wyckoff
         self.enable_elliott = enable_elliott
         self.cooldown = cooldown
+        self.prevent_conflicts = prevent_conflicts
         
         # Initialize analyzers
         self.wyckoff = WyckoffAnalyzer() if enable_wyckoff else None
@@ -58,6 +61,9 @@ class SignalFuser:
         
         # Track last signal time for cooldown: {(symbol, timeframe): timestamp}
         self.last_signal_time: Dict[tuple, float] = {}
+        
+        # Track last signal type for conflict prevention: {symbol: (signal_type, timestamp)}
+        self.last_signal_type: Dict[str, tuple] = {}
     
     async def generate_signal(
         self,
@@ -125,6 +131,19 @@ class SignalFuser:
             )
             
             if signal and signal["confidence"] >= self.min_confidence:
+                # Check for conflicting signals (same symbol, opposite direction, within 1 hour)
+                if self.prevent_conflicts and symbol in self.last_signal_type:
+                    last_type, last_time = self.last_signal_type[symbol]
+                    time_since_last = now - last_time
+                    
+                    if time_since_last < 3600 and last_type != signal["type"]:  # 1 hour = 3600 seconds
+                        logger.warning(
+                            f"🚫 Conflicting signal blocked: {signal['type']} {symbol} {timeframe} "
+                            f"(last signal: {last_type} {time_since_last/60:.1f}m ago). "
+                            f"Waiting {(3600-time_since_last)/60:.1f}m before allowing opposite signal."
+                        )
+                        return None
+                
                 # Store signal in database
                 signal_id = await self.supabase.insert_signal(signal)
                 if signal_id:
@@ -132,6 +151,9 @@ class SignalFuser:
                     
                     # Update cooldown
                     self.last_signal_time[key] = now
+                    
+                    # Update last signal type for this symbol
+                    self.last_signal_type[symbol] = (signal["type"], now)
                     
                     logger.info(
                         f"✅ Signal generated: {signal['type']} {symbol} {timeframe} "
