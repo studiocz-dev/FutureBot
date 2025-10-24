@@ -130,21 +130,53 @@ class CandleAggregator:
         candle: Dict[str, Any]
     ) -> None:
         """
-        Trigger all registered callbacks for candle close.
+        Trigger all registered callbacks for candle close IN PARALLEL.
+        
+        This allows all symbols to be analyzed simultaneously when their
+        candles close, ensuring fair signal distribution across all symbols.
         
         Args:
             symbol: Trading symbol
             timeframe: Timeframe
             candle: Closed candle data
         """
+        if not self.close_callbacks:
+            return
+        
+        # Create tasks for all callbacks to run in parallel
+        tasks = []
         for callback in self.close_callbacks:
-            try:
-                await callback(symbol, timeframe, candle)
-            except Exception as e:
-                logger.error(
-                    f"Error in candle close callback {callback.__name__}: {e}",
-                    exc_info=True
-                )
+            task = asyncio.create_task(
+                self._safe_callback_wrapper(callback, symbol, timeframe, candle)
+            )
+            tasks.append(task)
+        
+        # Execute all callbacks in parallel
+        await asyncio.gather(*tasks, return_exceptions=True)
+    
+    async def _safe_callback_wrapper(
+        self,
+        callback: Callable,
+        symbol: str,
+        timeframe: str,
+        candle: Dict[str, Any]
+    ) -> None:
+        """
+        Wrapper that safely executes a callback with error handling.
+        
+        Args:
+            callback: Callback function to execute
+            symbol: Trading symbol
+            timeframe: Timeframe
+            candle: Closed candle data
+        """
+        try:
+            await callback(symbol, timeframe, candle)
+        except Exception as e:
+            logger.error(
+                f"Error in candle close callback {callback.__name__}: {e}",
+                exc_info=True
+            )
     
     async def _persist_candle(
         self,

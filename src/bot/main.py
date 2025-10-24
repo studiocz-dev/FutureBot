@@ -165,11 +165,8 @@ class TradingBot:
             timeframe: Timeframe
             candle: Candle data
         """
-        logger.info(f"Candle closed: {symbol} {timeframe}", extra={
-            "symbol": symbol,
-            "timeframe": timeframe,
-            "close": candle.get("close"),
-        })
+        # Only log candle close in debug mode to reduce noise
+        logger.debug(f"📊 Analyzing {symbol} {timeframe} | Close: ${candle.get('close')}")
         
         try:
             # Generate signal using fuser
@@ -177,8 +174,8 @@ class TradingBot:
             
             if signal:
                 logger.info(
-                    f"Signal generated: {signal['type']} {symbol} {timeframe} "
-                    f"(confidence: {signal['confidence']:.2f})",
+                    f"🚀 SIGNAL: {signal['type']} {symbol} @ ${signal['entry_price']:.4f} | "
+                    f"Confidence: {signal['confidence']*100:.1f}%",
                     extra={
                         "symbol": symbol,
                         "timeframe": timeframe,
@@ -203,10 +200,13 @@ class TradingBot:
             return
         
         self.running = True
-        logger.info("Starting bot...")
+        logger.info("=" * 60)
+        logger.info("🤖 STARTING FUTUREBOT")
+        logger.info("=" * 60)
         
         try:
             # Start Discord bot in background
+            logger.info("📱 Connecting to Discord...")
             discord_task = asyncio.create_task(
                 self.discord_bot.start(self.config.discord.token)
             )
@@ -217,14 +217,15 @@ class TradingBot:
             # Wait for Discord bot to be ready (with timeout)
             try:
                 await asyncio.wait_for(self.discord_bot.wait_until_ready(), timeout=30.0)
-                logger.info("Discord bot is ready")
+                logger.info("✅ Discord bot connected")
             except asyncio.TimeoutError:
-                logger.error("Discord bot failed to connect within 30 seconds")
+                logger.error("❌ Discord bot failed to connect within 30 seconds")
                 raise
             
             # Download historical data if needed
-            logger.info("Downloading historical candle data...")
-            for symbol in self.config.signals.symbols:
+            logger.info("📊 Loading historical candle data...")
+            total_symbols = len(self.config.signals.symbols)
+            for idx, symbol in enumerate(self.config.signals.symbols, 1):
                 for timeframe in self.config.signals.timeframes:
                     try:
                         candles = await self.binance_rest.get_historical_klines(
@@ -232,7 +233,7 @@ class TradingBot:
                             interval=timeframe,
                             limit=500,  # Last 500 candles for context
                         )
-                        logger.info(f"Downloaded {len(candles)} candles for {symbol} {timeframe}")
+                        logger.info(f"  [{idx}/{total_symbols}] {symbol} {timeframe}: {len(candles)} candles loaded")
                         
                         # Store in database
                         await self.candle_aggregator.process_historical_candles(
@@ -241,15 +242,21 @@ class TradingBot:
                             candles=candles,
                         )
                     except Exception as e:
-                        logger.error(f"Error downloading historical data for {symbol} {timeframe}: {e}")
+                        logger.error(f"  ❌ Error loading {symbol} {timeframe}: {e}")
             
-            logger.info("Historical data download complete")
+            logger.info("✅ Historical data loaded successfully")
             
             # Start WebSocket connections
-            logger.info("Starting Binance WebSocket streams...")
+            stream_count = len(self.config.signals.symbols) * len(self.config.signals.timeframes)
+            logger.info(f"🌐 Starting {stream_count} WebSocket streams...")
             ws_task = asyncio.create_task(self.binance_ws.start())
             
-            logger.info("Bot is fully operational! 🚀")
+            logger.info("=" * 60)
+            logger.info("🚀 BOT IS FULLY OPERATIONAL!")
+            logger.info(f"📊 Monitoring: {len(self.config.signals.symbols)} symbols")
+            logger.info(f"⏱️  Timeframe: {', '.join(self.config.signals.timeframes)}")
+            logger.info(f"🎯 Min Confidence: {self.config.signals.min_confidence*100:.0f}%")
+            logger.info("=" * 60)
             
             # Send startup notification to Discord
             await self.discord_notifier.send_startup_message(

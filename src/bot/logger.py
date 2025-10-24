@@ -46,14 +46,49 @@ class JSONFormatter(logging.Formatter):
 
 
 class TextFormatter(logging.Formatter):
-    """Human-readable text formatter."""
+    """Human-readable text formatter with colors and clean layout."""
+    
+    # ANSI color codes
+    COLORS = {
+        'DEBUG': '\033[36m',    # Cyan
+        'INFO': '\033[32m',     # Green
+        'WARNING': '\033[33m',  # Yellow
+        'ERROR': '\033[31m',    # Red
+        'CRITICAL': '\033[35m', # Magenta
+        'RESET': '\033[0m',     # Reset
+    }
     
     def __init__(self):
         """Initialize text formatter."""
         super().__init__(
-            fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+            fmt="%(asctime)s [%(levelname)s] %(message)s",
+            datefmt="%H:%M:%S"
         )
+    
+    def format(self, record: LogRecord) -> str:
+        """Format log record with colors and structure."""
+        # Get base formatted message
+        log_message = super().format(record)
+        
+        # Add color based on level
+        color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
+        reset = self.COLORS['RESET']
+        
+        # Build structured output
+        parts = [f"{color}{log_message}{reset}"]
+        
+        # Add symbol/timeframe if present
+        if hasattr(record, 'symbol') and hasattr(record, 'timeframe'):
+            parts.append(f"  → {record.symbol} {record.timeframe}")
+        
+        # Add signal details if present
+        if hasattr(record, 'signal_type'):
+            parts.append(f"  → Signal: {record.signal_type}")
+        if hasattr(record, 'confidence'):
+            confidence_pct = record.confidence * 100
+            parts.append(f"  → Confidence: {confidence_pct:.1f}%")
+        
+        return " ".join(parts)
 
 
 def setup_logger(name: str, level: Optional[str] = None) -> logging.Logger:

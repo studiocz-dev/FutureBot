@@ -151,7 +151,7 @@ class BinanceWebSocketManager:
             ws: WebSocket connection
             stream_id: Stream identifier for logging
         """
-        logger.info(f"Started listening on stream: {stream_id}")
+        logger.info(f"✅ WebSocket connected: {stream_id}")
         
         try:
             async for message in ws:
@@ -219,7 +219,6 @@ class BinanceWebSocketManager:
             return
         
         self.running = True
-        logger.info("Starting WebSocket manager...")
         
         # Create stream combinations
         streams = []
@@ -228,7 +227,7 @@ class BinanceWebSocketManager:
                 streams.append(self._build_stream_name(symbol, timeframe))
         
         if not streams:
-            logger.warning("No streams configured")
+            logger.warning("⚠️  No streams configured")
             return
         
         # Binance allows up to 200 streams per connection, but we'll group reasonably
@@ -236,13 +235,13 @@ class BinanceWebSocketManager:
         stream_id = "combined_stream"
         url = self._build_ws_url(streams)
         
-        logger.info(f"Subscribing to {len(streams)} streams: {streams}")
+        logger.info(f"📡 Subscribing to {len(streams)} streams...")
         
         # Start connection task
         task = asyncio.create_task(self._connect_with_retry(stream_id, url))
         self.tasks.append(task)
         
-        logger.info("WebSocket manager started")
+        logger.info("✅ WebSocket streams active")
     
     def stop(self) -> None:
         """Stop all WebSocket connections."""

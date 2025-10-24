@@ -155,22 +155,23 @@ class SignalFuser:
                     # Update last signal type for this symbol
                     self.last_signal_type[symbol] = (signal["type"], now)
                     
+                    # Log with detailed info
+                    entry = signal['entry_price']
+                    tp = signal['take_profit']
+                    sl = signal['stop_loss']
+                    conf_pct = signal['confidence'] * 100
+                    
                     logger.info(
-                        f"✅ Signal generated: {signal['type']} {symbol} {timeframe} "
-                        f"(confidence: {signal['confidence']:.2%})",
-                        extra={
-                            "symbol": symbol,
-                            "timeframe": timeframe,
-                            "signal_type": signal["type"],
-                            "confidence": signal["confidence"],
-                        }
+                        f"✅ {signal['type']} {symbol} {timeframe} | "
+                        f"Entry: ${entry:.4f} | TP: ${tp:.4f} | SL: ${sl:.4f} | "
+                        f"Confidence: {conf_pct:.1f}%"
                     )
                     
                     return signal
             else:
                 if signal:
                     logger.debug(
-                        f"Signal below confidence threshold: {signal['confidence']:.2%} < {self.min_confidence:.2%}"
+                        f"⏸️  {symbol} {timeframe}: Confidence {signal['confidence']:.1%} < {self.min_confidence:.1%} (skipped)"
                     )
             
             return None
