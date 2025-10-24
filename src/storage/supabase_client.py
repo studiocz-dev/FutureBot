@@ -381,6 +381,87 @@ class SupabaseClient:
         except Exception as e:
             logger.error(f"Error updating signal status: {e}")
     
+    async def cleanup_old_candles(self, days: int = 30) -> int:
+        """
+        Delete candles older than the specified number of days.
+        
+        Args:
+            days: Number of days to keep (delete older than this)
+        
+        Returns:
+            Number of deleted records
+        """
+        try:
+            # Calculate cutoff timestamp (milliseconds)
+            from datetime import timedelta
+            cutoff_time = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+            
+            # Delete old candles
+            # Note: Supabase Python client doesn't directly return delete count
+            # So we'll count first, then delete
+            count_response = self.client.table("candles") \
+                .select("id", count="exact") \
+                .lt("open_time", cutoff_time) \
+                .execute()
+            
+            delete_count = count_response.count if hasattr(count_response, 'count') else 0
+            
+            if delete_count > 0:
+                self.client.table("candles") \
+                    .delete() \
+                    .lt("open_time", cutoff_time) \
+                    .execute()
+                
+                logger.info(f"Deleted {delete_count} candles older than {days} days")
+            else:
+                logger.info(f"No candles older than {days} days found")
+            
+            return delete_count
+        
+        except Exception as e:
+            logger.error(f"Error deleting old candles: {e}")
+            return 0
+    
+    async def cleanup_old_signals(self, days: int = 30) -> int:
+        """
+        Delete signals older than the specified number of days.
+        
+        Args:
+            days: Number of days to keep (delete older than this)
+        
+        Returns:
+            Number of deleted records
+        """
+        try:
+            # Calculate cutoff timestamp
+            from datetime import timedelta
+            cutoff_time = datetime.utcnow() - timedelta(days=days)
+            cutoff_str = cutoff_time.isoformat()
+            
+            # Count first, then delete
+            count_response = self.client.table("signals") \
+                .select("id", count="exact") \
+                .lt("created_at", cutoff_str) \
+                .execute()
+            
+            delete_count = count_response.count if hasattr(count_response, 'count') else 0
+            
+            if delete_count > 0:
+                self.client.table("signals") \
+                    .delete() \
+                    .lt("created_at", cutoff_str) \
+                    .execute()
+                
+                logger.info(f"Deleted {delete_count} signals older than {days} days")
+            else:
+                logger.info(f"No signals older than {days} days found")
+            
+            return delete_count
+        
+        except Exception as e:
+            logger.error(f"Error deleting old signals: {e}")
+            return 0
+    
     async def close(self) -> None:
         """Close the Supabase client."""
         # Supabase Python client doesn't require explicit closing

@@ -386,6 +386,93 @@ def setup_commands(
             logger.error(f"Error in signals list command: {e}", exc_info=True)
             await ctx.send("❌ An error occurred while fetching signals.")
     
+    @bot.command(name="cleanup", aliases=["clear", "reset"])
+    async def cleanup_database(ctx: commands.Context, confirm: Optional[str] = None):
+        """
+        Clean up old candles and signals from database.
+        
+        Usage: >cleanup confirm
+        
+        WARNING: This will delete:
+        - All candles older than 30 days
+        - All signals older than 30 days
+        
+        This does NOT delete:
+        - Recent candles (last 30 days)
+        - Recent signals (last 30 days)
+        - Backtest data
+        - User subscriptions
+        """
+        try:
+            if confirm != "confirm":
+                embed = discord.Embed(
+                    title="⚠️ Database Cleanup",
+                    description="This will delete old data from the database.",
+                    color=discord.Color.orange(),
+                )
+                embed.add_field(
+                    name="What will be deleted?",
+                    value="• Candles older than 30 days\n"
+                          "• Signals older than 30 days",
+                    inline=False
+                )
+                embed.add_field(
+                    name="What will be kept?",
+                    value="• Recent candles (last 30 days)\n"
+                          "• Recent signals (last 30 days)\n"
+                          "• All backtest data\n"
+                          "• User subscriptions",
+                    inline=False
+                )
+                embed.add_field(
+                    name="To proceed, use:",
+                    value="`>cleanup confirm`",
+                    inline=False
+                )
+                embed.set_footer(text="⚠️ This action cannot be undone!")
+                await ctx.send(embed=embed)
+                return
+            
+            # User confirmed - proceed with cleanup
+            await ctx.send("🧹 Starting database cleanup...")
+            
+            try:
+                # Delete old candles (older than 30 days)
+                deleted_candles = await supabase.cleanup_old_candles(days=30)
+                
+                # Delete old signals (older than 30 days)
+                deleted_signals = await supabase.cleanup_old_signals(days=30)
+                
+                embed = discord.Embed(
+                    title="✅ Database Cleanup Complete",
+                    description="Old data has been removed from the database.",
+                    color=discord.Color.green(),
+                )
+                embed.add_field(
+                    name="🗑️ Deleted",
+                    value=f"• {deleted_candles:,} old candles\n"
+                          f"• {deleted_signals:,} old signals",
+                    inline=False
+                )
+                embed.add_field(
+                    name="💾 Retained",
+                    value="• Recent candles (last 30 days)\n"
+                          "• Recent signals (last 30 days)",
+                    inline=False
+                )
+                embed.set_footer(text=f"Cleanup performed by {ctx.author}")
+                
+                await ctx.send(embed=embed)
+                logger.info(f"Database cleanup executed by {ctx.author}: {deleted_candles} candles, {deleted_signals} signals deleted")
+                
+            except Exception as e:
+                logger.error(f"Error during database cleanup: {e}", exc_info=True)
+                await ctx.send(f"❌ Cleanup failed: {str(e)}")
+        
+        except Exception as e:
+            logger.error(f"Error in cleanup command: {e}", exc_info=True)
+            await ctx.send("❌ An error occurred during cleanup.")
+    
     # Log all registered commands
     registered_commands = [cmd.name for cmd in bot.commands]
     logger.info(f"Registered Discord prefix commands: {', '.join(registered_commands)}")
