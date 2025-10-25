@@ -138,6 +138,33 @@ class SignalConfig(BaseModel):
         )
 
 
+class HistoricalDataConfig(BaseModel):
+    """Historical data configuration."""
+    
+    startup_candles: int = Field(default=5000, description="Candles to fetch at startup per symbol/timeframe")
+    analysis_candles: int = Field(default=2000, description="Candles to use for signal analysis")
+    min_candles: int = Field(default=500, description="Minimum candles required for analysis")
+    atr_candles: int = Field(default=30, description="Candles to use for ATR calculation")
+    
+    @field_validator("startup_candles", "analysis_candles", "min_candles", "atr_candles")
+    @classmethod
+    def validate_positive(cls, v: int) -> int:
+        """Validate values are positive."""
+        if v <= 0:
+            raise ValueError("Candle counts must be positive")
+        return v
+    
+    @classmethod
+    def from_env(cls) -> "HistoricalDataConfig":
+        """Load historical data config from environment variables."""
+        return cls(
+            startup_candles=int(os.getenv("STARTUP_CANDLES", "5000")),
+            analysis_candles=int(os.getenv("ANALYSIS_CANDLES", "2000")),
+            min_candles=int(os.getenv("MIN_CANDLES", "500")),
+            atr_candles=int(os.getenv("ATR_CANDLES", "30")),
+        )
+
+
 class CacheConfig(BaseModel):
     """Cache configuration."""
     
@@ -213,6 +240,7 @@ class Config:
         self.binance = BinanceConfig.from_env()
         self.trading = TradingConfig.from_env()
         self.signals = SignalConfig.from_env()
+        self.historical = HistoricalDataConfig.from_env()
         self.cache = CacheConfig.from_env()
         self.log = LogConfig.from_env()
         self.websocket = WebSocketConfig.from_env()

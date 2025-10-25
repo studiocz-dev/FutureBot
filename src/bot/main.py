@@ -96,6 +96,9 @@ class TradingBot:
             enable_elliott=self.config.signals.enable_elliott,
             cooldown=self.config.signals.signal_cooldown,
             prevent_conflicts=self.config.signals.prevent_conflicts,
+            analysis_candles=self.config.historical.analysis_candles,
+            min_candles=self.config.historical.min_candles,
+            atr_candles=self.config.historical.atr_candles,
         )
         
         # Initialize Discord bot
@@ -231,7 +234,7 @@ class TradingBot:
                         candles = await self.binance_rest.get_historical_klines(
                             symbol=symbol,
                             interval=timeframe,
-                            limit=500,  # Last 500 candles for context
+                            limit=self.config.historical.startup_candles,
                         )
                         logger.info(f"  [{idx}/{total_symbols}] {symbol} {timeframe}: {len(candles)} candles loaded")
                         

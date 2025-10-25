@@ -36,6 +36,9 @@ class SignalFuser:
         enable_elliott: bool = True,
         cooldown: int = 300,
         prevent_conflicts: bool = True,
+        analysis_candles: int = 2000,
+        min_candles: int = 500,
+        atr_candles: int = 30,
     ):
         """
         Initialize signal fuser.
@@ -47,6 +50,9 @@ class SignalFuser:
             enable_elliott: Enable Elliott Wave analysis
             cooldown: Cooldown period in seconds between signals for same symbol/timeframe
             prevent_conflicts: Prevent conflicting signals (SHORT/LONG) for same symbol within 1 hour
+            analysis_candles: Number of candles to fetch for analysis
+            min_candles: Minimum candles required for analysis
+            atr_candles: Number of candles for ATR calculation
         """
         self.supabase = supabase
         self.min_confidence = min_confidence
@@ -54,6 +60,9 @@ class SignalFuser:
         self.enable_elliott = enable_elliott
         self.cooldown = cooldown
         self.prevent_conflicts = prevent_conflicts
+        self.analysis_candles = analysis_candles
+        self.min_candles = min_candles
+        self.atr_candles = atr_candles
         
         # Initialize analyzers
         self.wyckoff = WyckoffAnalyzer() if enable_wyckoff else None
@@ -97,13 +106,13 @@ class SignalFuser:
             
             # Get historical candles if not provided
             if historical_candles is None:
-                historical_candles = await self._fetch_candles(symbol, timeframe, limit=100)
+                historical_candles = await self._fetch_candles(symbol, timeframe, limit=self.analysis_candles)
             
             # Ensure current candle is included
             all_candles = historical_candles + [current_candle]
             
-            if len(all_candles) < 50:
-                logger.warning(f"Insufficient candles for analysis: {symbol} {timeframe}")
+            if len(all_candles) < self.min_candles:
+                logger.warning(f"Insufficient candles for analysis: {symbol} {timeframe} (have {len(all_candles)}, need {self.min_candles})")
                 return None
             
             current_price = float(current_candle["close"])
@@ -272,7 +281,7 @@ class SignalFuser:
             final_confidence = min(1.0, base_confidence + confirmation_bonus)
             
             # Calculate stop loss and take profit
-            atr = calculate_atr(candles[-30:], period=14)
+            atr = calculate_atr(candles[-self.atr_candles:], period=14)
             
             if final_signal == "LONG":
                 stop_loss = current_price - (atr * 2) if atr else current_price * 0.98
