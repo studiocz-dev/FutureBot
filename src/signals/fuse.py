@@ -143,6 +143,29 @@ class SignalFuser:
                             f"Waiting {(3600-time_since_last)/60:.1f}m before allowing opposite signal."
                         )
                         return None
+                    
+                    # ANTI-SPAM: Prevent same-direction signals within 4 hours unless significant price movement
+                    if time_since_last < 14400 and last_type == signal["type"]:  # 4 hours = 14400 seconds
+                        # Get the price when last signal was generated
+                        last_signals = await self.supabase.get_recent_signals(symbol, limit=1)
+                        if last_signals:
+                            last_entry_price = float(last_signals[0]["entry_price"])
+                            price_change_pct = abs((current_price - last_entry_price) / last_entry_price)
+                            
+                            # Require at least 3% price movement to re-signal same direction
+                            min_movement_required = 0.03
+                            
+                            if price_change_pct < min_movement_required:
+                                logger.info(
+                                    f"⏭️  Skipping {signal['type']} {symbol}: Same direction signal too soon "
+                                    f"({time_since_last/3600:.1f}h ago, only {price_change_pct:.1%} price change, need >{min_movement_required:.1%})"
+                                )
+                                return None
+                            else:
+                                logger.debug(
+                                    f"✓ Allowing {signal['type']} {symbol}: Sufficient price movement "
+                                    f"({price_change_pct:.1%} > {min_movement_required:.1%})"
+                                )
                 
                 # Store signal in database
                 signal_id = await self.supabase.insert_signal(signal)
