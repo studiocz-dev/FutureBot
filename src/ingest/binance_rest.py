@@ -8,7 +8,7 @@ Implements rate limiting and retry logic.
 import asyncio
 import time
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import aiohttp
 from ..bot.logger import get_logger
@@ -197,29 +197,71 @@ class BinanceRESTClient:
     ) -> List[Dict[str, Any]]:
         """
         Get historical kline data with parsed fields.
+        Handles large requests by making multiple API calls if limit > 1500.
         
         Args:
             symbol: Trading symbol
             interval: Kline interval
             start_time: Start datetime
             end_time: End datetime
-            limit: Number of candles to retrieve
+            limit: Number of candles to retrieve (can exceed 1500)
         
         Returns:
             List of parsed candle dictionaries
         """
-        start_ms = int(start_time.timestamp() * 1000) if start_time else None
-        end_ms = int(end_time.timestamp() * 1000) if end_time else None
+        MAX_PER_REQUEST = 1500
+        all_candles = []
         
-        raw_klines = await self.get_klines(
-            symbol=symbol,
-            interval=interval,
-            start_time=start_ms,
-            end_time=end_ms,
-            limit=limit,
-        )
+        # If limit <= 1500, single request
+        if limit <= MAX_PER_REQUEST:
+            start_ms = int(start_time.timestamp() * 1000) if start_time else None
+            end_ms = int(end_time.timestamp() * 1000) if end_time else None
+            
+            raw_klines = await self.get_klines(
+                symbol=symbol,
+                interval=interval,
+                start_time=start_ms,
+                end_time=end_ms,
+                limit=limit,
+            )
+            all_candles = self._parse_klines(raw_klines)
+        else:
+            # Multiple requests needed - work backwards from end_time
+            remaining = limit
+            current_end_time = end_time
+            
+            while remaining > 0:
+                batch_limit = min(remaining, MAX_PER_REQUEST)
+                end_ms = int(current_end_time.timestamp() * 1000) if current_end_time else None
+                
+                raw_klines = await self.get_klines(
+                    symbol=symbol,
+                    interval=interval,
+                    end_time=end_ms,
+                    limit=batch_limit,
+                )
+                
+                if not raw_klines:
+                    break
+                
+                batch_candles = self._parse_klines(raw_klines)
+                all_candles = batch_candles + all_candles  # Prepend older candles
+                remaining -= len(batch_candles)
+                
+                # Update end_time to oldest candle in this batch minus 1ms
+                if len(batch_candles) > 0:
+                    oldest_time_ms = batch_candles[0]["open_time"]
+                    current_end_time = datetime.fromtimestamp((oldest_time_ms - 1) / 1000, tz=timezone.utc)
+                
+                # If we got fewer candles than requested, we've reached the limit
+                if len(batch_candles) < batch_limit:
+                    break
         
-        # Parse klines into structured format
+        logger.info(f"Retrieved {len(all_candles)} candles for {symbol} {interval}")
+        return all_candles
+    
+    def _parse_klines(self, raw_klines: List[List[Any]]) -> List[Dict[str, Any]]:
+        """Parse raw kline data into structured format."""
         candles = []
         for kline in raw_klines:
             candles.append({
@@ -235,8 +277,6 @@ class BinanceRESTClient:
                 "taker_buy_base": float(kline[9]),
                 "taker_buy_quote": float(kline[10]),
             })
-        
-        logger.info(f"Retrieved {len(candles)} candles for {symbol} {interval}")
         return candles
     
     async def get_ticker_price(self, symbol: Optional[str] = None) -> Any:
