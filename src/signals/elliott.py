@@ -59,12 +59,18 @@ class ElliottWaveAnalyzer:
         try:
             # Find significant pivot points (swing highs/lows)
             pivots = self._find_pivots(candles)
+            logger.debug(f"Elliott Wave for {symbol}: found {len(pivots)} pivots (need ≥5)")
             
             if len(pivots) < 5:
                 return self._empty_result()
             
             # Attempt to count waves
             wave_count = self._count_waves(pivots, candles)
+            
+            if wave_count:
+                logger.debug(f"Elliott Wave count for {symbol}: type={wave_count.get('type')}, valid={wave_count.get('valid')}, confidence={wave_count.get('confidence', 0):.2f}")
+            else:
+                logger.debug(f"Elliott Wave for {symbol}: no valid wave count found")
             
             # Generate signal if we're at a potential reversal point
             signal = None

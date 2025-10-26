@@ -60,10 +60,16 @@ class WyckoffAnalyzer:
         try:
             # Detect current phase
             phase = self._detect_phase(candles)
+            logger.debug(f"Wyckoff phase for {symbol}: {phase.value}")
             
             # Look for springs (bullish) or upthrusts (bearish)
             spring = self._detect_spring(candles)
             upthrust = self._detect_upthrust(candles)
+            
+            if spring:
+                logger.debug(f"Spring detected for {symbol}: confidence={spring['confidence']:.2f}, phase={phase.value}")
+            if upthrust:
+                logger.debug(f"Upthrust detected for {symbol}: confidence={upthrust['confidence']:.2f}, phase={phase.value}")
             
             # Generate signal if criteria met
             signal = None
