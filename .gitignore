@@ -81,3 +81,6 @@ dump.rdb
 # Backtest results
 backtest_results/
 *.pkl
+
+server env
+test_run.log

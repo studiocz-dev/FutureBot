@@ -99,6 +99,7 @@ class TradingBot:
             analysis_candles=self.config.historical.analysis_candles,
             min_candles=self.config.historical.min_candles,
             atr_candles=self.config.historical.atr_candles,
+            tpsl_config=self.config.tpsl,
         )
         
         # Initialize Discord bot

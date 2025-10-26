@@ -165,6 +165,43 @@ class HistoricalDataConfig(BaseModel):
         )
 
 
+class TPSLConfig(BaseModel):
+    """Take Profit / Stop Loss configuration."""
+    
+    use_atr_targets: bool = Field(default=False, description="Use ATR-based TP/SL calculation")
+    use_elliott_wave_targets: bool = Field(default=True, description="Use Elliott Wave-based TP/SL calculation")
+    
+    # ATR settings
+    atr_stop_loss_multiplier: float = Field(default=2.0, description="ATR multiplier for stop loss")
+    atr_take_profit_multiplier: float = Field(default=3.0, description="ATR multiplier for take profit")
+    
+    # Elliott Wave settings
+    elliott_wave_5_ratio: float = Field(default=1.0, description="Wave 5 projection ratio (to Wave 1)")
+    
+    # Safety settings
+    min_risk_reward_ratio: float = Field(default=1.2, description="Minimum acceptable risk/reward ratio")
+    
+    @field_validator("atr_stop_loss_multiplier", "atr_take_profit_multiplier", "elliott_wave_5_ratio", "min_risk_reward_ratio")
+    @classmethod
+    def validate_positive(cls, v: float) -> float:
+        """Validate values are positive."""
+        if v <= 0:
+            raise ValueError("Multipliers and ratios must be positive")
+        return v
+    
+    @classmethod
+    def from_env(cls) -> "TPSLConfig":
+        """Load TP/SL config from environment variables."""
+        return cls(
+            use_atr_targets=os.getenv("USE_ATR_TARGETS", "false").lower() == "true",
+            use_elliott_wave_targets=os.getenv("USE_ELLIOTT_WAVE_TARGETS", "true").lower() == "true",
+            atr_stop_loss_multiplier=float(os.getenv("ATR_STOP_LOSS_MULTIPLIER", "2.0")),
+            atr_take_profit_multiplier=float(os.getenv("ATR_TAKE_PROFIT_MULTIPLIER", "3.0")),
+            elliott_wave_5_ratio=float(os.getenv("ELLIOTT_WAVE_5_RATIO", "1.0")),
+            min_risk_reward_ratio=float(os.getenv("MIN_RISK_REWARD_RATIO", "1.2")),
+        )
+
+
 class CacheConfig(BaseModel):
     """Cache configuration."""
     
@@ -241,6 +278,7 @@ class Config:
         self.trading = TradingConfig.from_env()
         self.signals = SignalConfig.from_env()
         self.historical = HistoricalDataConfig.from_env()
+        self.tpsl = TPSLConfig.from_env()
         self.cache = CacheConfig.from_env()
         self.log = LogConfig.from_env()
         self.websocket = WebSocketConfig.from_env()
