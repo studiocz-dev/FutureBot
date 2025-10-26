@@ -94,6 +94,8 @@ class TradingBot:
             min_confidence=self.config.signals.min_confidence,
             enable_wyckoff=self.config.signals.enable_wyckoff,
             enable_elliott=self.config.signals.enable_elliott,
+            enable_rsi=self.config.signals.enable_rsi,
+            enable_macd=self.config.signals.enable_macd,
             cooldown=self.config.signals.signal_cooldown,
             prevent_conflicts=self.config.signals.prevent_conflicts,
             analysis_candles=self.config.historical.analysis_candles,

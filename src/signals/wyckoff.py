@@ -225,8 +225,8 @@ class WyckoffAnalyzer:
                             (0.2 if i == len(recent) - 1 else 0.1)  # Recent spring is better
                         ))
                         
-                        # Require minimum confidence
-                        if confidence < 0.5:
+                        # Require minimum confidence (lowered from 0.5 to 0.35 for more signals)
+                        if confidence < 0.35:
                             continue
                         
                         return {
@@ -290,7 +290,8 @@ class WyckoffAnalyzer:
                             (0.2 if i == len(recent) - 1 else 0.1)
                         ))
                         
-                        if confidence < 0.5:
+                        # Require minimum confidence (lowered from 0.5 to 0.35 for more signals)
+                        if confidence < 0.35:
                             continue
                         
                         return {

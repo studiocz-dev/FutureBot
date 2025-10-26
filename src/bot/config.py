@@ -110,6 +110,8 @@ class SignalConfig(BaseModel):
     min_confidence: float = Field(default=0.65, description="Minimum confidence to trigger signal")
     enable_wyckoff: bool = Field(default=True, description="Enable Wyckoff analysis")
     enable_elliott: bool = Field(default=True, description="Enable Elliott Wave analysis")
+    enable_rsi: bool = Field(default=True, description="Enable RSI analysis")
+    enable_macd: bool = Field(default=True, description="Enable MACD analysis")
     signal_cooldown: int = Field(default=300, description="Cooldown period in seconds")
     prevent_conflicts: bool = Field(default=True, description="Prevent conflicting signals for same symbol")
     
@@ -133,6 +135,8 @@ class SignalConfig(BaseModel):
             min_confidence=float(os.getenv("MIN_CONFIDENCE", "0.65")),
             enable_wyckoff=os.getenv("ENABLE_WYCKOFF", "true").lower() == "true",
             enable_elliott=os.getenv("ENABLE_ELLIOTT", "true").lower() == "true",
+            enable_rsi=os.getenv("ENABLE_RSI", "true").lower() == "true",
+            enable_macd=os.getenv("ENABLE_MACD", "true").lower() == "true",
             signal_cooldown=int(os.getenv("SIGNAL_COOLDOWN", "300")),
             prevent_conflicts=os.getenv("PREVENT_SIGNAL_CONFLICTS", "true").lower() == "true",
         )

@@ -1,7 +1,7 @@
 """
 Signal fuser module.
 
-Combines Wyckoff, Elliott Wave, and indicator analysis to generate final trading signals.
+Combines Wyckoff, Elliott Wave, RSI, MACD analysis to generate final trading signals.
 """
 
 import time
@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 
 from .wyckoff import WyckoffAnalyzer
 from .elliott import ElliottWaveAnalyzer
+from .rsi import RSIAnalyzer
+from .macd import MACDAnalyzer
 from .indicators import get_indicator_confirmations, calculate_atr
 from ..storage.models import calculate_signal_risk_reward
 from ..bot.logger import get_logger
@@ -34,6 +36,8 @@ class SignalFuser:
         min_confidence: float = 0.65,
         enable_wyckoff: bool = True,
         enable_elliott: bool = True,
+        enable_rsi: bool = True,
+        enable_macd: bool = True,
         cooldown: int = 300,
         prevent_conflicts: bool = True,
         analysis_candles: int = 2000,
@@ -49,6 +53,8 @@ class SignalFuser:
             min_confidence: Minimum confidence threshold for signals
             enable_wyckoff: Enable Wyckoff analysis
             enable_elliott: Enable Elliott Wave analysis
+            enable_rsi: Enable RSI analysis
+            enable_macd: Enable MACD analysis
             cooldown: Cooldown period in seconds between signals for same symbol/timeframe
             prevent_conflicts: Prevent conflicting signals (SHORT/LONG) for same symbol within 1 hour
             analysis_candles: Number of candles to fetch for analysis
@@ -60,6 +66,8 @@ class SignalFuser:
         self.min_confidence = min_confidence
         self.enable_wyckoff = enable_wyckoff
         self.enable_elliott = enable_elliott
+        self.enable_rsi = enable_rsi
+        self.enable_macd = enable_macd
         self.cooldown = cooldown
         self.prevent_conflicts = prevent_conflicts
         self.analysis_candles = analysis_candles
@@ -70,6 +78,8 @@ class SignalFuser:
         # Initialize analyzers
         self.wyckoff = WyckoffAnalyzer() if enable_wyckoff else None
         self.elliott = ElliottWaveAnalyzer() if enable_elliott else None
+        self.rsi = RSIAnalyzer() if enable_rsi else None
+        self.macd = MACDAnalyzer() if enable_macd else None
         
         # Track last signal time for cooldown: {(symbol, timeframe): timestamp}
         self.last_signal_time: Dict[tuple, float] = {}
@@ -126,6 +136,8 @@ class SignalFuser:
             # Run analyses
             wyckoff_result = None
             elliott_result = None
+            rsi_result = None
+            macd_result = None
             
             if self.enable_wyckoff and self.wyckoff:
                 wyckoff_result = self.wyckoff.analyze(all_candles, symbol, timeframe)
@@ -143,10 +155,30 @@ class SignalFuser:
             else:
                 logger.info(f"  🌊 Elliott: DISABLED")
             
+            if self.enable_rsi and self.rsi:
+                rsi_result = self.rsi.analyze(all_candles, symbol, timeframe)
+                rsi_signal = rsi_result.get('signal')
+                rsi_conf = rsi_result.get('confidence', 0.0) * 100
+                rsi_value = rsi_result.get('rsi', 50)
+                logger.info(f"  📈 RSI: {rsi_signal or 'NONE'} ({rsi_conf:.1f}%) [RSI={rsi_value:.1f}]")
+            else:
+                logger.info(f"  📈 RSI: DISABLED")
+            
+            if self.enable_macd and self.macd:
+                macd_result = self.macd.analyze(all_candles, symbol, timeframe)
+                macd_signal = macd_result.get('signal')
+                macd_conf = macd_result.get('confidence', 0.0) * 100
+                macd_hist = macd_result.get('histogram', 0)
+                logger.info(f"  📉 MACD: {macd_signal or 'NONE'} ({macd_conf:.1f}%) [Hist={macd_hist:.4f}]")
+            else:
+                logger.info(f"  📉 MACD: DISABLED")
+            
             # Fuse signals
             signal = self._fuse_signals(
                 wyckoff=wyckoff_result,
                 elliott=elliott_result,
+                rsi=rsi_result,
+                macd=macd_result,
                 candles=all_candles,
                 symbol=symbol,
                 timeframe=timeframe,
@@ -248,6 +280,8 @@ class SignalFuser:
         self,
         wyckoff: Optional[Dict[str, Any]],
         elliott: Optional[Dict[str, Any]],
+        rsi: Optional[Dict[str, Any]],
+        macd: Optional[Dict[str, Any]],
         candles: List[Dict[str, Any]],
         symbol: str,
         timeframe: str,
@@ -256,9 +290,17 @@ class SignalFuser:
         """
         Fuse analysis results into a final signal.
         
+        Multi-tiered fusion logic:
+        1. If Wyckoff + Elliott agree → High confidence (75-90%)
+        2. If Wyckoff or Elliott signals + RSI/MACD confirm → Medium-High confidence (65-75%)
+        3. If only RSI + MACD agree → Medium confidence (55-65%)
+        4. If only one indicator → Low confidence (rejected)
+        
         Args:
             wyckoff: Wyckoff analysis result
             elliott: Elliott Wave analysis result
+            rsi: RSI analysis result
+            macd: MACD analysis result
             candles: Historical candles
             symbol: Trading symbol
             timeframe: Timeframe
@@ -271,45 +313,84 @@ class SignalFuser:
             # Extract signals and confidences
             wyckoff_signal = wyckoff.get("signal") if wyckoff else None
             elliott_signal = elliott.get("signal") if elliott else None
+            rsi_signal = rsi.get("signal") if rsi else None
+            macd_signal = macd.get("signal") if macd else None
             
             wyckoff_conf = wyckoff.get("confidence", 0) if wyckoff else 0
             elliott_conf = elliott.get("confidence", 0) if elliott else 0
+            rsi_conf = rsi.get("confidence", 0) if rsi else 0
+            macd_conf = macd.get("confidence", 0) if macd else 0
             
             # Determine final direction
-            # Both methods must agree, or one must be very strong
             final_signal = None
+            base_confidence = 0.0
             fusion_reason = ""
             
-            if wyckoff_signal and elliott_signal:
-                if wyckoff_signal == elliott_signal:
-                    # Strong agreement
-                    final_signal = wyckoff_signal
-                    base_confidence = (wyckoff_conf + elliott_conf) / 2
-                    fusion_reason = f"Both agree on {final_signal}"
-                    logger.debug(f"  ✓ Fusion: {fusion_reason} (avg conf: {base_confidence*100:.1f}%)")
-                else:
-                    # Disagreement - no signal
-                    fusion_reason = f"Disagreement: Wyckoff={wyckoff_signal} vs Elliott={elliott_signal}"
-                    logger.debug(f"  ✗ Fusion: {fusion_reason}")
-                    return None
+            # TIER 1: Wyckoff + Elliott Agreement (Highest Confidence: 75-90%)
+            if wyckoff_signal and elliott_signal and wyckoff_signal == elliott_signal:
+                final_signal = wyckoff_signal
+                base_confidence = (wyckoff_conf + elliott_conf) / 2
+                
+                # Bonus if RSI/MACD also agree
+                agreeing_indicators = []
+                if rsi_signal == final_signal:
+                    base_confidence += 0.05
+                    agreeing_indicators.append("RSI")
+                if macd_signal == final_signal:
+                    base_confidence += 0.05
+                    agreeing_indicators.append("MACD")
+                
+                base_confidence = min(0.95, base_confidence)  # Cap at 95%
+                fusion_reason = f"Wyckoff+Elliott agree on {final_signal}"
+                if agreeing_indicators:
+                    fusion_reason += f" (confirmed by {', '.join(agreeing_indicators)})"
+                logger.debug(f"  ✓ TIER 1 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
             
+            # TIER 2: One Pattern Analyzer + Both Technical Indicators (65-80%)
+            elif (wyckoff_signal or elliott_signal) and rsi_signal and macd_signal:
+                pattern_signal = wyckoff_signal or elliott_signal
+                pattern_conf = wyckoff_conf if wyckoff_signal else elliott_conf
+                pattern_name = "Wyckoff" if wyckoff_signal else "Elliott"
+                
+                if pattern_signal == rsi_signal == macd_signal:
+                    final_signal = pattern_signal
+                    base_confidence = (pattern_conf + rsi_conf + macd_conf) / 3
+                    fusion_reason = f"{pattern_name}+RSI+MACD agree on {final_signal}"
+                    logger.debug(f"  ✓ TIER 2 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
+            
+            # TIER 3: RSI + MACD Agreement (55-70%)
+            elif rsi_signal and macd_signal and rsi_signal == macd_signal:
+                final_signal = rsi_signal
+                base_confidence = (rsi_conf + macd_conf) / 2
+                fusion_reason = f"RSI+MACD agree on {final_signal}"
+                logger.debug(f"  ✓ TIER 3 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
+            
+            # TIER 4: Strong Single Pattern Analyzer (>75% alone)
             elif wyckoff_signal and wyckoff_conf >= 0.75:
-                # Strong Wyckoff signal alone
                 final_signal = wyckoff_signal
                 base_confidence = wyckoff_conf * 0.9  # Slight penalty for lack of confirmation
                 fusion_reason = f"Strong Wyckoff {final_signal} alone (>75%)"
-                logger.debug(f"  ✓ Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
+                logger.debug(f"  ✓ TIER 4 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
             
             elif elliott_signal and elliott_conf >= 0.75:
-                # Strong Elliott signal alone
                 final_signal = elliott_signal
                 base_confidence = elliott_conf * 0.9
                 fusion_reason = f"Strong Elliott {final_signal} alone (>75%)"
-                logger.debug(f"  ✓ Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
+                logger.debug(f"  ✓ TIER 4 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
             
             else:
-                # No strong signals
-                fusion_reason = "No strong signals (need both to agree or one >75%)"
+                # No strong or agreeing signals
+                signals_summary = []
+                if wyckoff_signal:
+                    signals_summary.append(f"Wyckoff={wyckoff_signal}")
+                if elliott_signal:
+                    signals_summary.append(f"Elliott={elliott_signal}")
+                if rsi_signal:
+                    signals_summary.append(f"RSI={rsi_signal}")
+                if macd_signal:
+                    signals_summary.append(f"MACD={macd_signal}")
+                
+                fusion_reason = f"No agreement or strong signal: {', '.join(signals_summary) if signals_summary else 'No signals'}"
                 logger.debug(f"  ✗ Fusion: {fusion_reason}")
                 return None
             
