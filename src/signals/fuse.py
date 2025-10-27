@@ -86,10 +86,6 @@ class SignalFuser:
         
         # Track last signal type for conflict prevention: {symbol: (signal_type, timestamp)}
         self.last_signal_type: Dict[str, tuple] = {}
-        
-        # Per-symbol cooldown to prevent spam from volatile symbols (1 hour)
-        self.symbol_cooldown = 3600  # 1 hour in seconds
-        self.last_symbol_signal: Dict[str, float] = {}  # {symbol: timestamp}
     
     async def generate_signal(
         self,
@@ -111,7 +107,7 @@ class SignalFuser:
             Signal dictionary or None if no signal generated
         """
         try:
-            # Check global cooldown (any signal from this symbol+timeframe)
+            # Check cooldown
             key = (symbol, timeframe)
             now = time.time()
             
@@ -119,14 +115,6 @@ class SignalFuser:
                 elapsed = now - self.last_signal_time[key]
                 if elapsed < self.cooldown:
                     logger.debug(f"Signal cooldown active for {symbol} {timeframe} ({elapsed:.0f}s / {self.cooldown}s)")
-                    return None
-            
-            # Check per-symbol cooldown (prevents spam from volatile symbols)
-            if symbol in self.last_symbol_signal:
-                elapsed = now - self.last_symbol_signal[symbol]
-                if elapsed < self.symbol_cooldown:
-                    remaining = self.symbol_cooldown - elapsed
-                    logger.debug(f"Symbol cooldown: {symbol} signaled {elapsed/60:.0f}m ago (wait {remaining/60:.0f}m)")
                     return None
             
             # Get historical candles if not provided
@@ -267,11 +255,8 @@ class SignalFuser:
                 if signal_id:
                     signal["id"] = signal_id
                     
-                    # Update global cooldown
+                    # Update cooldown
                     self.last_signal_time[key] = now
-                    
-                    # Update per-symbol cooldown (prevents spam)
-                    self.last_symbol_signal[symbol] = now
                     
                     # Update last signal type for this symbol
                     self.last_signal_type[symbol] = (signal["type"], now)
@@ -393,8 +378,8 @@ class SignalFuser:
                 logger.debug(f"  ✓ TIER 3 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
             
             # TIER 3.5: Strong Single Technical Indicator (60-75%)
-            # RSI alone when EXTREMELY oversold/overbought (≥90%), or MACD with strong crossover (≥75%)
-            elif rsi_signal and rsi_conf >= 0.90:
+            # RSI alone when extremely oversold/overbought, or MACD with strong crossover
+            elif rsi_signal and rsi_conf >= 0.80:
                 final_signal = rsi_signal
                 base_confidence = rsi_conf * 0.85  # Penalty for lack of confirmation
                 fusion_reason = f"Strong RSI {final_signal} alone ({rsi_conf*100:.1f}%)"
