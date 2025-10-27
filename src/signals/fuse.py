@@ -133,43 +133,55 @@ class SignalFuser:
             # Log analysis start
             logger.info(f"🔍 Analyzing {symbol} {timeframe} @ ${current_price:.4f}")
             
-            # Run analyses
+            # Run analyses with error handling
             wyckoff_result = None
             elliott_result = None
             rsi_result = None
             macd_result = None
             
             if self.enable_wyckoff and self.wyckoff:
-                wyckoff_result = self.wyckoff.analyze(all_candles, symbol, timeframe)
-                wyckoff_signal = wyckoff_result.get('signal')
-                wyckoff_conf = wyckoff_result.get('confidence', 0.0) * 100
-                logger.info(f"  📊 Wyckoff: {wyckoff_signal or 'NONE'} ({wyckoff_conf:.1f}%)")
+                try:
+                    wyckoff_result = self.wyckoff.analyze(all_candles, symbol, timeframe)
+                    wyckoff_signal = wyckoff_result.get('signal')
+                    wyckoff_conf = wyckoff_result.get('confidence', 0.0) * 100
+                    logger.info(f"  📊 Wyckoff: {wyckoff_signal or 'NONE'} ({wyckoff_conf:.1f}%)")
+                except Exception as e:
+                    logger.error(f"  📊 Wyckoff: ERROR - {str(e)}")
             else:
                 logger.info(f"  📊 Wyckoff: DISABLED")
             
             if self.enable_elliott and self.elliott:
-                elliott_result = self.elliott.analyze(all_candles, symbol, timeframe)
-                elliott_signal = elliott_result.get('signal')
-                elliott_conf = elliott_result.get('confidence', 0.0) * 100
-                logger.info(f"  🌊 Elliott: {elliott_signal or 'NONE'} ({elliott_conf:.1f}%)")
+                try:
+                    elliott_result = self.elliott.analyze(all_candles, symbol, timeframe)
+                    elliott_signal = elliott_result.get('signal')
+                    elliott_conf = elliott_result.get('confidence', 0.0) * 100
+                    logger.info(f"  🌊 Elliott: {elliott_signal or 'NONE'} ({elliott_conf:.1f}%)")
+                except Exception as e:
+                    logger.error(f"  🌊 Elliott: ERROR - {str(e)}")
             else:
                 logger.info(f"  🌊 Elliott: DISABLED")
             
             if self.enable_rsi and self.rsi:
-                rsi_result = self.rsi.analyze(all_candles, symbol, timeframe)
-                rsi_signal = rsi_result.get('signal')
-                rsi_conf = rsi_result.get('confidence', 0.0) * 100
-                rsi_value = rsi_result.get('rsi', 50)
-                logger.info(f"  📈 RSI: {rsi_signal or 'NONE'} ({rsi_conf:.1f}%) [RSI={rsi_value:.1f}]")
+                try:
+                    rsi_result = self.rsi.analyze(all_candles, symbol, timeframe)
+                    rsi_signal = rsi_result.get('signal')
+                    rsi_conf = rsi_result.get('confidence', 0.0) * 100
+                    rsi_value = rsi_result.get('rsi', 50)
+                    logger.info(f"  📈 RSI: {rsi_signal or 'NONE'} ({rsi_conf:.1f}%) [RSI={rsi_value:.1f}]")
+                except Exception as e:
+                    logger.error(f"  📈 RSI: ERROR - {str(e)}")
             else:
                 logger.info(f"  📈 RSI: DISABLED")
             
             if self.enable_macd and self.macd:
-                macd_result = self.macd.analyze(all_candles, symbol, timeframe)
-                macd_signal = macd_result.get('signal')
-                macd_conf = macd_result.get('confidence', 0.0) * 100
-                macd_hist = macd_result.get('histogram', 0)
-                logger.info(f"  📉 MACD: {macd_signal or 'NONE'} ({macd_conf:.1f}%) [Hist={macd_hist:.4f}]")
+                try:
+                    macd_result = self.macd.analyze(all_candles, symbol, timeframe)
+                    macd_signal = macd_result.get('signal')
+                    macd_conf = macd_result.get('confidence', 0.0) * 100
+                    macd_hist = macd_result.get('histogram', 0)
+                    logger.info(f"  📉 MACD: {macd_signal or 'NONE'} ({macd_conf:.1f}%) [Hist={macd_hist:.4f}]")
+                except Exception as e:
+                    logger.error(f"  📉 MACD: ERROR - {str(e)}")
             else:
                 logger.info(f"  📉 MACD: DISABLED")
             
@@ -364,6 +376,20 @@ class SignalFuser:
                 base_confidence = (rsi_conf + macd_conf) / 2
                 fusion_reason = f"RSI+MACD agree on {final_signal}"
                 logger.debug(f"  ✓ TIER 3 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
+            
+            # TIER 3.5: Strong Single Technical Indicator (60-75%)
+            # RSI alone when extremely oversold/overbought, or MACD with strong crossover
+            elif rsi_signal and rsi_conf >= 0.80:
+                final_signal = rsi_signal
+                base_confidence = rsi_conf * 0.85  # Penalty for lack of confirmation
+                fusion_reason = f"Strong RSI {final_signal} alone ({rsi_conf*100:.1f}%)"
+                logger.debug(f"  ✓ TIER 3.5 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
+            
+            elif macd_signal and macd_conf >= 0.75:
+                final_signal = macd_signal
+                base_confidence = macd_conf * 0.85  # Penalty for lack of confirmation
+                fusion_reason = f"Strong MACD {final_signal} alone ({macd_conf*100:.1f}%)"
+                logger.debug(f"  ✓ TIER 3.5 Fusion: {fusion_reason} (conf: {base_confidence*100:.1f}%)")
             
             # TIER 4: Strong Single Pattern Analyzer (>75% alone)
             elif wyckoff_signal and wyckoff_conf >= 0.75:
