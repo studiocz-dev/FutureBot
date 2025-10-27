@@ -75,12 +75,12 @@ elif rsi_signal and macd_signal and rsi_signal == macd_signal:
     final_signal = rsi_signal
     base_confidence = (rsi_conf + macd_conf) / 2
 
-# TIER 3.5: Medium Confidence (60-75%) ← NEW!
+# TIER 3.5: Strong Single Technical Indicator (60-75%) ← NEW!
 # Strong single technical indicator
-elif rsi_signal and rsi_conf >= 0.80:
+elif rsi_signal and rsi_conf >= 0.90:  # OPTIMIZED: Was 0.80, now only EXTREME readings
     final_signal = rsi_signal
     base_confidence = rsi_conf * 0.85  # 15% penalty for lack of confirmation
-    # RSI 80% → 68% final confidence ✓ (above 55% min)
+    # RSI 90% → 76.5% final confidence ✓ (above 55% min)
     # RSI 100% → 85% final confidence ✓
 
 elif macd_signal and macd_conf >= 0.75:
